@@ -43,7 +43,7 @@ Speak or type your thoughts and instantly discover the **emotion and sentiment b
 ## 👨‍💻 Author
 
 **Prerna Sharma**
-GitHub: https://github.com/prerna-sharma-only
+GitHub: https://github.com/prerna-sharma-only    
 **Prasoon Mishra**
 GitHub: https://github.com/prasoonmishraa
 
