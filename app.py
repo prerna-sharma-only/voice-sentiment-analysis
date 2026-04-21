@@ -24,21 +24,32 @@ def init_db():
 init_db()
 
 
-# ---------------- MODELS ----------------
-emotion_model = pipeline(
-    "text-classification",
-    model="j-hartmann/emotion-english-distilroberta-base",
-    top_k=None
-)
+# ---------------- MODELS (LAZY LOAD) ----------------
+emotion_model = None
+sentiment_model = None
 
-sentiment_model = pipeline(
-    "sentiment-analysis",
-    model="cardiffnlp/twitter-roberta-base-sentiment-latest"
-)
+def load_models():
+    global emotion_model, sentiment_model
+
+    if emotion_model is None or sentiment_model is None:
+        print("Loading models...")
+
+        emotion_model = pipeline(
+            "text-classification",
+            model="j-hartmann/emotion-english-distilroberta-base",
+            top_k=None
+        )
+
+        sentiment_model = pipeline(
+            "sentiment-analysis",
+            model="cardiffnlp/twitter-roberta-base-sentiment-latest"
+        )
 
 
 # ---------------- ANALYSIS FUNCTION ----------------
 def analyze_text(text):
+    load_models()  # 👈 important
+
     emo = emotion_model(text)[0]
 
     emotions = {e['label']: round(e['score'] * 100, 2) for e in emo}
