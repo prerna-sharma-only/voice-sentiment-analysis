@@ -25,6 +25,7 @@ init_db()
 
 
 # ---------------- MODELS (LAZY LOAD) ----------------
+# ---------------- MODELS (SAFE LOAD) ----------------
 emotion_model = None
 sentiment_model = None
 
@@ -32,7 +33,9 @@ def load_models():
     global emotion_model, sentiment_model
 
     if emotion_model is None or sentiment_model is None:
-        print("🔥 Loading models...")
+        print(" Loading models...")
+
+        from transformers import pipeline  # lazy import (IMPORTANT)
 
         emotion_model = pipeline(
             "text-classification",
@@ -162,7 +165,12 @@ def analyze():
         print("❌ API error:", e)
         return jsonify({"error": "Server error"}), 500
 
+@app.route("/ping")
+def ping():
+    return "pong"
+
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
