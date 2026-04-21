@@ -1,174 +1,56 @@
-from flask import Flask, render_template, request, redirect, session, jsonify
-import sqlite3
-import os
+from flask import Flask, render_template, request, jsonify
 from transformers import pipeline
 
 app = Flask(__name__)
-app.secret_key = "secret123"
 
+classifier = pipeline(
+    "text-classification",
+    model="j-hartmann/emotion-english-distilroberta-base",
+    top_k=None
+)
 
-# ---------------- DATABASE ----------------
-def init_db():
-    conn = sqlite3.connect("users.db")
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT,
-            password TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
-
-
-# ---------------- MODELS (LAZY LOAD) ----------------
-# ---------------- MODELS (SAFE LOAD) ----------------
-emotion_model = None
-sentiment_model = None
-
-def load_models():
-    global emotion_model, sentiment_model
-
-    if emotion_model is None or sentiment_model is None:
-        print(" Loading models...")
-
-        from transformers import pipeline  # lazy import (IMPORTANT)
-
-        emotion_model = pipeline(
-            "text-classification",
-            model="j-hartmann/emotion-english-distilroberta-base",
-            top_k=None
-        )
-
-        sentiment_model = pipeline(
-            "sentiment-analysis",
-            model="cardiffnlp/twitter-roberta-base-sentiment-latest"
-        )
-
-
-# ---------------- ANALYSIS FUNCTION ----------------
 def analyze_text(text):
-    load_models()
+    result = classifier(text)
 
-    if not text or text.strip() == "":
-        return {}, "empty", "NEUTRAL"
+    if isinstance(result, list) and isinstance(result[0], list):
+        result = result[0]
 
-    try:
-        emo = emotion_model(text)[0]
-        emotions = {e['label']: round(e['score'] * 100, 2) for e in emo}
-        main = max(emotions, key=emotions.get)
+    emotions = {}
+    for item in result:
+        emotions[item['label']] = round(item['score'] * 100, 2)
 
-        sent = sentiment_model(text)[0]['label']
+    main = max(emotions, key=emotions.get)
 
-        if "ok" in text.lower():
-            main = "neutral"
-            sent = "NEUTRAL"
+    return emotions, main
 
-        return emotions, main, sent
+def generate_message(sentiment):
+    if sentiment == "joy":
+        return "You're glowing today ✨"
+    elif sentiment == "sadness":
+        return "Hey... things will get better 💙"
+    elif sentiment == "anger":
+        return "Relax... you're in control 🧘"
+    else:
+        return "Stay calm and balanced 😌"
 
-    except Exception as e:
-        print("❌ Model error:", e)
-        return {}, "error", "ERROR"
-
-
-# ---------------- ROUTES ----------------
 @app.route("/")
 def home():
-    if "user" not in session:
-        return redirect("/login")
     return render_template("index.html")
 
-
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    error = None
-
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-
-        conn = sqlite3.connect("users.db")
-        c = conn.cursor()
-
-        c.execute("SELECT * FROM users WHERE username=?", (username,))
-        existing = c.fetchone()
-
-        if existing:
-            error = "Username already exists"
-        else:
-            c.execute(
-                "INSERT INTO users (username, password) VALUES (?, ?)",
-                (username, password)
-            )
-            conn.commit()
-            conn.close()
-            return redirect("/login")
-
-        conn.close()
-
-    return render_template("register.html", error=error)
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    error = None
-
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-
-        conn = sqlite3.connect("users.db")
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username=?", (username,))
-        user = c.fetchone()
-        conn.close()
-
-        if not user:
-            error = "User does not exist"
-        elif user[2] != password:
-            error = "Incorrect password"
-        else:
-            session["user"] = username
-            return redirect("/")
-
-    return render_template("login.html", error=error)
-
-
-@app.route("/logout")
-def logout():
-    session.pop("user", None)
-    return redirect("/login")
-
-
-# ---------------- TEXT API ----------------
 @app.route("/analyze-text", methods=["POST"])
 def analyze():
-    try:
-        data = request.get_json(force=True)
-        text = data.get("text", "")
+    data = request.json
+    text = data.get("text")
 
-        print("📥 Received:", text)
+    emotions, main = analyze_text(text)
+    message = generate_message(main)
 
-        emotions, main, sentiment = analyze_text(text)
-
-        return jsonify({
-            "emotion": main,
-            "sentiment": sentiment,
-            "emotions": emotions,
-            "message": "Processed successfully"
-        })
-
-    except Exception as e:
-        print("❌ API error:", e)
-        return jsonify({"error": "Server error"}), 500
-
-@app.route("/ping")
-def ping():
-    return "pong"
-
+    return jsonify({
+        "text": text,
+        "main": main,
+        "emotions": emotions,
+        "message": message
+    })
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
