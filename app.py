@@ -1,10 +1,14 @@
 from flask import Flask, render_template, request, redirect, session, jsonify
 import sqlite3
+import os
 from transformers import pipeline
+import speech_recognition as sr
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
+
+# ---------------- DATABASE ----------------
 def init_db():
     conn = sqlite3.connect("users.db")
     c = conn.cursor()
@@ -20,6 +24,8 @@ def init_db():
 
 init_db()
 
+
+# ---------------- MODELS ----------------
 emotion_model = pipeline(
     "text-classification",
     model="j-hartmann/emotion-english-distilroberta-base",
@@ -31,12 +37,12 @@ sentiment_model = pipeline(
     model="cardiffnlp/twitter-roberta-base-sentiment-latest"
 )
 
+
+# ---------------- ANALYSIS FUNCTION ----------------
 def analyze_text(text):
     emo = emotion_model(text)[0]
-    if isinstance(emo, list):
-        emo = emo
 
-    emotions = {e['label']: round(e['score']*100, 2) for e in emo}
+    emotions = {e['label']: round(e['score'] * 100, 2) for e in emo}
     main = max(emotions, key=emotions.get)
 
     sent = sentiment_model(text)[0]['label']
@@ -48,6 +54,7 @@ def analyze_text(text):
     return emotions, main, sent
 
 
+# ---------------- ROUTES ----------------
 @app.route("/")
 def home():
     if "user" not in session:
@@ -72,7 +79,10 @@ def register():
         if existing:
             error = "Username already exists"
         else:
-            c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            c.execute(
+                "INSERT INTO users (username, password) VALUES (?, ?)",
+                (username, password)
+            )
             conn.commit()
             conn.close()
             return redirect("/login")
@@ -113,9 +123,11 @@ def logout():
     return redirect("/login")
 
 
+# ---------------- TEXT API ----------------
 @app.route("/analyze-text", methods=["POST"])
 def analyze():
-    text = request.json.get("text")
+    data = request.get_json()
+    text = data.get("text")
 
     emotions, main, sentiment = analyze_text(text)
 
@@ -125,6 +137,41 @@ def analyze():
         "emotions": emotions,
         "message": "Processed successfully"
     })
+
+
+# ---------------- AUDIO API (NEW - browser mic support) ----------------
+@app.route("/analyze-audio", methods=["POST"])
+def analyze_audio():
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file"}), 400
+
+    audio_file = request.files["audio"]
+
+    temp_path = "temp.wav"
+    audio_file.save(temp_path)
+
+    recognizer = sr.Recognizer()
+
+    try:
+        with sr.AudioFile(temp_path) as source:
+            audio = recognizer.record(source)
+            text = recognizer.recognize_google(audio)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    emotions, main, sentiment = analyze_text(text)
+
+    return jsonify({
+        "text": text,
+        "emotion": main,
+        "sentiment": sentiment,
+        "emotions": emotions
+    })
+
+
+# ---------------- RUN ----------------
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
 
 import os
