@@ -8,15 +8,29 @@ An intelligent web application that transforms **voice and text into emotional i
 
 * 🎙️ Real-time voice input with seamless interaction
 * ✍️ Instant text-based sentiment detection
-* 🤖 Accurate emotion recognition (joy, anger, sadness, etc.)
+* 🤖 Accurate emotion recognition
 * 🔐 Secure authentication system
-* ⚡ Smooth, modern, and responsive UI
+* ⚡ Smooth, modern UI
 
 ---
 
 ## 🧠 Powered By
 
-**Flask • JavaScript • Hugging Face Transformers • SQLite**
+Flask • JavaScript • Hugging Face Transformers • SQLite
+
+---
+
+## 📸 Preview
+
+### 🔐 Authentication
+
+<img width="800" src="https://github.com/user-attachments/assets/e067f9bb-96da-4b55-9dbb-97407a9cd820?raw=true" />
+
+
+### 🎤 Sentiment Dashboard
+
+<img width="800" src="https://github.com/user-attachments/assets/49295ad3-4444-4253-a45c-43485a4ebe75?raw=true" />
+
 
 ---
 
@@ -26,10 +40,14 @@ Speak or type your thoughts and instantly discover the **emotion and sentiment b
 
 ---
 
+## 👨‍💻 Author
+
 **Prerna Sharma**
 GitHub: https://github.com/prerna-sharma-only
-
+**Prasoon Mishra**
+GitHub: https://github.com/prasoonmishraa
 
 ---
 
-⭐ If you like this project, don’t forget to star it!
+⭐ Star this repo if you like it!
+
