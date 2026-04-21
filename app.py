@@ -32,7 +32,7 @@ def load_models():
     global emotion_model, sentiment_model
 
     if emotion_model is None or sentiment_model is None:
-        print("Loading models...")
+        print("🔥 Loading models...")
 
         emotion_model = pipeline(
             "text-classification",
@@ -48,20 +48,27 @@ def load_models():
 
 # ---------------- ANALYSIS FUNCTION ----------------
 def analyze_text(text):
-    load_models()  # 👈 important
+    load_models()
 
-    emo = emotion_model(text)[0]
+    if not text or text.strip() == "":
+        return {}, "empty", "NEUTRAL"
 
-    emotions = {e['label']: round(e['score'] * 100, 2) for e in emo}
-    main = max(emotions, key=emotions.get)
+    try:
+        emo = emotion_model(text)[0]
+        emotions = {e['label']: round(e['score'] * 100, 2) for e in emo}
+        main = max(emotions, key=emotions.get)
 
-    sent = sentiment_model(text)[0]['label']
+        sent = sentiment_model(text)[0]['label']
 
-    if "ok" in text.lower():
-        main = "neutral"
-        sent = "NEUTRAL"
+        if "ok" in text.lower():
+            main = "neutral"
+            sent = "NEUTRAL"
 
-    return emotions, main, sent
+        return emotions, main, sent
+
+    except Exception as e:
+        print("❌ Model error:", e)
+        return {}, "error", "ERROR"
 
 
 # ---------------- ROUTES ----------------
@@ -136,17 +143,24 @@ def logout():
 # ---------------- TEXT API ----------------
 @app.route("/analyze-text", methods=["POST"])
 def analyze():
-    data = request.get_json()
-    text = data.get("text")
+    try:
+        data = request.get_json(force=True)
+        text = data.get("text", "")
 
-    emotions, main, sentiment = analyze_text(text)
+        print("📥 Received:", text)
 
-    return jsonify({
-        "emotion": main,
-        "sentiment": sentiment,
-        "emotions": emotions,
-        "message": "Processed successfully"
-    })
+        emotions, main, sentiment = analyze_text(text)
+
+        return jsonify({
+            "emotion": main,
+            "sentiment": sentiment,
+            "emotions": emotions,
+            "message": "Processed successfully"
+        })
+
+    except Exception as e:
+        print("❌ API error:", e)
+        return jsonify({"error": "Server error"}), 500
 
 
 # ---------------- RUN ----------------
