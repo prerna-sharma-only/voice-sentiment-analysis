@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, redirect, session, jsonify
 import sqlite3
 import os
 from transformers import pipeline
-import speech_recognition as sr
 
 app = Flask(__name__)
 app.secret_key = "secret123"
@@ -139,42 +138,6 @@ def analyze():
     })
 
 
-# ---------------- AUDIO API (NEW - browser mic support) ----------------
-@app.route("/analyze-audio", methods=["POST"])
-def analyze_audio():
-    if "audio" not in request.files:
-        return jsonify({"error": "No audio file"}), 400
-
-    audio_file = request.files["audio"]
-
-    temp_path = "temp.wav"
-    audio_file.save(temp_path)
-
-    recognizer = sr.Recognizer()
-
-    try:
-        with sr.AudioFile(temp_path) as source:
-            audio = recognizer.record(source)
-            text = recognizer.recognize_google(audio)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    emotions, main, sentiment = analyze_text(text)
-
-    return jsonify({
-        "text": text,
-        "emotion": main,
-        "sentiment": sentiment,
-        "emotions": emotions
-    })
-
-
 # ---------------- RUN ----------------
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
-
-import os
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
