@@ -59,7 +59,7 @@ def home():
     return render_template("index.html")
 
 
-# 🔐 REGISTER
+#  REGISTER
 @app.route("/register", methods=["GET", "POST"])
 def register():
     error = None
@@ -88,7 +88,7 @@ def register():
     return render_template("register.html", error=error)
 
 
-# 🔐 LOGIN (FIXED)
+#  LOGIN (FIXED)
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
@@ -114,14 +114,14 @@ def login():
     return render_template("login.html", error=error)
 
 
-# 🚪 LOGOUT
+#  LOGOUT
 @app.route("/logout")
 def logout():
     session.pop("user", None)
     return redirect("/login")
 
 
-# 🧠 AI ROUTE
+#  AI ROUTE
 @app.route("/analyze-text", methods=["POST"])
 def analyze():
     text = request.json.get("text")
