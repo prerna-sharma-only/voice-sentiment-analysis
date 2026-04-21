@@ -1,113 +1,189 @@
 const btn = document.getElementById("micBtn");
 const status = document.getElementById("status");
-const textBtn = document.getElementById("textBtn");
-const textInput = document.getElementById("textInput");
-const glow = document.getElementById("mouseGlow");
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+recognition.lang = "en-US";
 
-if (!SpeechRecognition) {
-    alert("Speech Recognition not supported in this browser");
+//  Wave animation
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let analyser;
+let dataArray;
+
+async function setupAudio() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(stream);
+
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+
+    source.connect(analyser);
+
+    const bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+
+    drawWave();
 }
 
-const recognition = new SpeechRecognition();
-recognition.lang = "en-US";
-recognition.interimResults = false;
-recognition.continuous = false;
+const canvas = document.getElementById("wave");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = 150;
 
-let isListening = false;
+function drawWave() {
+    requestAnimationFrame(drawWave);
 
-// 🎤 MIC
-btn.onclick = () => {
-    if (!isListening) {
-        recognition.start();
-        status.innerText = "🎤 Listening...";
-        isListening = true;
-        btn.innerText = "🛑 Stop";
-    } else {
-        recognition.stop();
-        status.innerText = "Stopped";
-        isListening = false;
-        btn.innerText = "🎙️ Start Talking";
+    analyser.getByteFrequencyData(dataArray);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath();
+
+    let sliceWidth = canvas.width / dataArray.length;
+    let x = 0;
+
+    for (let i = 0; i < dataArray.length; i++) {
+        let v = dataArray[i] / 255;
+        let y = v * canvas.height;
+
+        ctx.lineTo(x, y);
+        x += sliceWidth;
     }
+
+    ctx.strokeStyle = "#00ffcc";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+}
+
+//  start audio when button clicked
+btn.onclick = () => {
+    recognition.start();
+    status.innerText = "Listening...";
+    setupAudio(); //  important
 };
 
-// 🎤 RESULT
-recognition.onresult = (event) => {
+//  Click
+btn.onclick = () => {
+    recognition.start();
+    status.innerText = "Listening...";
+};
+
+let chart; // global chart
+
+//  Result (ONLY ONE FUNCTION)
+recognition.onresult = async (event) => {
     const text = event.results[0][0].transcript;
-    console.log("🎙️ Recognized:", text);
-    recognition.stop();
-    analyzeText(text);
-};
-
-// 🎤 END
-recognition.onend = () => {
-    isListening = false;
-    btn.innerText = "🎙️ Start Talking";
-};
-
-// ❌ ERROR
-recognition.onerror = (event) => {
-    console.error("Speech error:", event.error);
-    status.innerText = "Mic Error: " + event.error;
-};
-
-// ✍️ TEXT
-textBtn.onclick = () => {
-    const text = textInput.value.trim();
-    if (!text) return alert("Enter text");
-    analyzeText(text);
-};
-
-textInput.addEventListener("keypress", e => {
-    if (e.key === "Enter") textBtn.click();
-});
-
-// 🔥 API
-async function analyzeText(text) {
     status.innerText = "Processing...";
 
-    try {
-        const res = await fetch("/analyze-text", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text })
-        });
+    const res = await fetch("/analyze-text", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ text })
+    });
 
-        if (!res.ok) {
-            throw new Error("Server responded with error");
-        }
+    const data = await res.json();
 
-        const data = await res.json();
-        console.log("📦 Response:", data);
+    // Update UI
+    document.getElementById("text").innerText = text;
+    document.getElementById("main").innerText = data.main;
+    document.getElementById("message").innerText = data.message;
 
-        document.getElementById("text").innerText = text;
-        document.getElementById("main").innerText =
-            (data.emotion || "unknown") + " (" + (data.sentiment || "unknown") + ")";
-        document.getElementById("message").innerText =
-            data.message || "";
+    //  Background fix
+    document.body.className = data.main || "default";
 
-        status.innerText = "Done ✅";
+    //  Chart
+    const ctxChart = document.getElementById("chart").getContext("2d");
 
-    } catch (err) {
-        console.error("❌ Fetch error:", err);
-        status.innerText = "Server error ❌";
-    }
-}
+    if (chart) chart.destroy(); // destroy old chart
 
-// 🖱️ EFFECT
-document.addEventListener("mousemove", e => {
-    glow.style.left = e.clientX + "px";
-    glow.style.top = e.clientY + "px";
-});
-
-// ✨ SCROLL
-function revealOnScroll() {
-    document.querySelectorAll(".reveal").forEach(el => {
-        if (el.getBoundingClientRect().top < window.innerHeight - 100) {
-            el.classList.add("active");
+    chart = new Chart(ctxChart, {
+        type: "bar",
+        data: {
+            labels: Object.keys(data.emotions),
+            datasets: [{
+                label: "Emotion %",
+                data: Object.values(data.emotions),
+                backgroundColor: [
+                    "#ff4b5c", "#00ffcc", "#ffd700",
+                    "#4facfe", "#ff8c00", "#9b59b6"
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    labels: { color: "white" }
+                }
+            },
+            scales: {
+                x: { ticks: { color: "white" } },
+                y: { ticks: { color: "white" } }
+            }
         }
     });
+
+    //  Voice reply
+    const speech = new SpeechSynthesisUtterance(data.message);
+    speechSynthesis.speak(speech);
+
+    //  Save history
+    let history = JSON.parse(localStorage.getItem("moods")) || [];
+    history.push(data);
+    localStorage.setItem("moods", JSON.stringify(history));
+
+    displayHistory();
+
+    status.innerText = "Done ✅";
+};
+
+//  Show history
+function displayHistory() {
+    const historyDiv = document.getElementById("history");
+    let history = JSON.parse(localStorage.getItem("moods")) || [];
+
+    historyDiv.innerHTML = "<h3>Past Moods</h3>";
+
+    history.slice(-5).forEach(item => {
+        historyDiv.innerHTML += `<p>${item.text} → ${item.main}</p>`;
+    });
 }
-window.addEventListener("scroll", revealOnScroll);
-revealOnScroll();
+
+displayHistory();
+const cursor = document.getElementById("cursor");
+
+document.addEventListener("mousemove", (e) => {
+    cursor.style.left = e.clientX + "px";
+    cursor.style.top = e.clientY + "px";
+});
+const pCanvas = document.getElementById("particles");
+const pCtx = pCanvas.getContext("2d");
+
+pCanvas.width = window.innerWidth;
+pCanvas.height = window.innerHeight;
+
+let particles = [];
+
+for (let i = 0; i < 80; i++) {
+    particles.push({
+        x: Math.random() * pCanvas.width,
+        y: Math.random() * pCanvas.height,
+        size: Math.random() * 3,
+        speed: Math.random() * 1
+    });
+}
+
+function drawParticles() {
+    pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+
+    particles.forEach(p => {
+        p.y -= p.speed;
+        if (p.y < 0) p.y = pCanvas.height;
+
+        pCtx.beginPath();
+        pCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        pCtx.fillStyle = "rgba(255,255,255,0.3)";
+        pCtx.fill();
+    });
+
+    requestAnimationFrame(drawParticles);
+}
+drawParticles();
